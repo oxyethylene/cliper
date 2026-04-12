@@ -1,0 +1,78 @@
+name: Desktop Release Build
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    name: Build ${{ matrix.os }} package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for Gradle wrapper
+        if: runner.os != 'Windows'
+        run: chmod +x ./gradlew
+
+      - name: Build macOS DMG
+        if: runner.os == 'macOS'
+        run: ./gradlew :composeApp:packageReleaseDmg --stacktrace
+
+      - name: Build Windows MSI
+        if: runner.os == 'Windows'
+        run: .\gradlew.bat :composeApp:packageReleaseMsi --stacktrace
+
+      - name: Build Windows ZIP
+        if: runner.os == 'Windows'
+        run: .\gradlew.bat :composeApp:packageReleaseZip --stacktrace
+
+      - name: Upload macOS artifacts
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cliper-macos-dmg
+          path: |
+            composeApp/build/compose/binaries/main/dmg/*.dmg
+            composeApp/build/compose/binaries/main/dmg/**/*.dmg
+          if-no-files-found: error
+
+      - name: Upload Windows artifacts
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cliper-windows-msi
+          path: |
+            composeApp/build/compose/binaries/main/msi/*.msi
+            composeApp/build/compose/binaries/main/msi/**/*.msi
+          if-no-files-found: error
+
+      - name: Upload Windows ZIP artifacts
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cliper-windows-zip
+          path: |
+            composeApp/build/compose/binaries/main/app/*.zip
+            composeApp/build/compose/binaries/main/app/**/*.zip
+          if-no-files-found: error
