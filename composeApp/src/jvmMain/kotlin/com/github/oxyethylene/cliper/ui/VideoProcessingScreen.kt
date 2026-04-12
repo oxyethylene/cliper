@@ -70,7 +70,7 @@ fun VideoProcessingScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Cliper", style = MaterialTheme.typography.headlineMedium)
+        Text("cliper", style = MaterialTheme.typography.headlineMedium)
         Text("Cut video and reduce bitrate using FFmpeg.")
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
