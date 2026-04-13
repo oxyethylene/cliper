@@ -1,16 +1,52 @@
-name: Desktop Release Build
+name: Desktop CI and Release
 
 on:
   push:
     branches:
       - main
       - dev
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+      - dev
   workflow_dispatch:
 
 jobs:
-  build-desktop:
-    name: Build ${{ matrix.os }} package
+  ci:
+    name: CI (compile and test)
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x ./gradlew
+
+      - name: Compile JVM target
+        run: ./gradlew :composeApp:compileKotlinJvm --stacktrace
+
+      - name: Run tests
+        run: ./gradlew :composeApp:jvmTest --stacktrace
+
+  build-release:
+    name: Build release package (${{ matrix.os }})
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -39,9 +75,20 @@ jobs:
         if: runner.os == 'macOS'
         run: ./gradlew :composeApp:packageReleaseDmg --stacktrace
 
-      - name: Build Windows MSI
+      - name: Build Windows MSI and app image
         if: runner.os == 'Windows'
-        run: .\gradlew.bat :composeApp:packageReleaseMsi --stacktrace
+        run: .\gradlew.bat :composeApp:packageReleaseMsi :composeApp:createReleaseDistributable --stacktrace
+
+      - name: Create Windows ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $appDir = "composeApp/build/compose/binaries/main-release/app"
+          if (!(Test-Path $appDir)) {
+            throw "App distributable directory not found: $appDir"
+          }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          Compress-Archive -Path "$appDir/*" -DestinationPath "dist/cliper-windows-portable.zip" -Force
 
       - name: Upload macOS artifacts
         if: runner.os == 'macOS'
@@ -57,8 +104,39 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: cliper-windows-msi
+          name: cliper-windows-packages
           path: |
             composeApp/build/compose/binaries/main-release/msi/*.msi
             composeApp/build/compose/binaries/main-release/msi/**/*.msi
+            dist/cliper-windows-portable.zip
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cliper-macos-dmg
+          path: dist/macos
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cliper-windows-packages
+          path: dist/windows
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/macos/**/*.dmg
+            dist/windows/**/*.msi
+            dist/windows/**/*.zip
           if-no-files-found: error
