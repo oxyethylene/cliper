@@ -12,9 +12,16 @@ import kotlin.io.path.outputStream
 private const val DefaultBitrateKbps = 2000
 private const val DefaultFfmpegPath = "ffmpeg"
 
+enum class ThemeMode {
+    FOLLOW_SYSTEM,
+    LIGHT,
+    DARK,
+}
+
 data class AppSettings(
     val ffmpegPath: String,
     val defaultBitrateKbps: Int,
+    val themeMode: ThemeMode,
 )
 
 class AppSettingsStore(
@@ -26,6 +33,7 @@ class AppSettingsStore(
                 return@runCatching AppSettings(
                     ffmpegPath = DefaultFfmpegPath,
                     defaultBitrateKbps = DefaultBitrateKbps,
+                    themeMode = ThemeMode.FOLLOW_SYSTEM,
                 )
             }
 
@@ -34,15 +42,20 @@ class AppSettingsStore(
 
             val ffmpegPath = props.getProperty("ffmpegPath")?.takeIf { it.isNotBlank() } ?: DefaultFfmpegPath
             val bitrate = props.getProperty("defaultBitrateKbps")?.toIntOrNull()?.takeIf { it > 0 } ?: DefaultBitrateKbps
+            val themeMode = props.getProperty("themeMode")
+                ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
+                ?: ThemeMode.FOLLOW_SYSTEM
 
             AppSettings(
                 ffmpegPath = ffmpegPath,
                 defaultBitrateKbps = bitrate,
+                themeMode = themeMode,
             )
         }.getOrDefault(
             AppSettings(
                 ffmpegPath = DefaultFfmpegPath,
                 defaultBitrateKbps = DefaultBitrateKbps,
+                themeMode = ThemeMode.FOLLOW_SYSTEM,
             ),
         )
     }
@@ -54,6 +67,7 @@ class AppSettingsStore(
             val props = Properties().apply {
                 setProperty("ffmpegPath", settings.ffmpegPath)
                 setProperty("defaultBitrateKbps", settings.defaultBitrateKbps.toString())
+                setProperty("themeMode", settings.themeMode.name)
             }
 
             settingsFile.outputStream(

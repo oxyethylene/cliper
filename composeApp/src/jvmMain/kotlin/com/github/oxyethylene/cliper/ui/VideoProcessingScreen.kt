@@ -24,6 +24,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.unit.dp
 import com.github.oxyethylene.cliper.domain.ProcessingState
+import com.github.oxyethylene.cliper.service.settings.ThemeMode
 import org.jetbrains.skia.Image
 import java.awt.FileDialog
 import java.awt.Frame
@@ -69,7 +71,7 @@ fun VideoProcessingScreen(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF7F2E9))
+            .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp),
     ) {
         Sidebar(
@@ -79,25 +81,29 @@ fun VideoProcessingScreen(
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFF7F2E9)),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
-            when (state.selectedTab) {
-                SidebarTab.Video -> VideoTabContent(
-                    state = state,
-                    viewModel = viewModel,
-                )
-                SidebarTab.Settings -> SettingsTabContent(
-                    state = state,
-                    viewModel = viewModel,
-                )
-            }
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when (state.selectedTab) {
+                    SidebarTab.Video -> VideoTabContent(
+                        state = state,
+                        viewModel = viewModel,
+                    )
+                    SidebarTab.Settings -> SettingsTabContent(
+                        state = state,
+                        viewModel = viewModel,
+                    )
+                }
 
-            if (!state.errorMessage.isNullOrBlank()) {
-                Text(state.errorMessage ?: "", color = MaterialTheme.colorScheme.error)
+                if (!state.errorMessage.isNullOrBlank()) {
+                    Text(state.errorMessage ?: "", color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }
@@ -112,7 +118,7 @@ private fun Sidebar(
         modifier = Modifier
             .width(220.dp)
             .fillMaxSize(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8DECF)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(
             modifier = Modifier
@@ -144,12 +150,15 @@ private fun SidebarItem(
     onClick: () -> Unit,
 ) {
     val background = if (selected) Color(0xFF1E6A5D) else Color.Transparent
-    val foreground = if (selected) Color(0xFFF6EFD9) else Color(0xFF24323D)
+    val foreground = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(background, shape = MaterialTheme.shapes.small)
+            .background(
+                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = MaterialTheme.shapes.small,
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -271,6 +280,46 @@ private fun SettingsTabContent(
         label = { Text("Default target video bitrate (kbps)") },
         singleLine = true,
     )
+
+    Text("Theme", style = MaterialTheme.typography.titleMedium)
+    Text("Choose Light, Dark, or follow the OS appearance.")
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ThemeModeChip(
+            label = "Follow OS",
+            selected = state.themeMode == ThemeMode.FOLLOW_SYSTEM,
+            onClick = { viewModel.updateThemeMode(ThemeMode.FOLLOW_SYSTEM) },
+        )
+        ThemeModeChip(
+            label = "Light",
+            selected = state.themeMode == ThemeMode.LIGHT,
+            onClick = { viewModel.updateThemeMode(ThemeMode.LIGHT) },
+        )
+        ThemeModeChip(
+            label = "Dark",
+            selected = state.themeMode == ThemeMode.DARK,
+            onClick = { viewModel.updateThemeMode(ThemeMode.DARK) },
+        )
+    }
+}
+
+@Composable
+private fun ThemeModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val container = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(
+        modifier = Modifier
+            .background(container, shape = MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(label, color = content)
+    }
 }
 
 @Composable

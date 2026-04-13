@@ -10,6 +10,7 @@ import com.github.oxyethylene.cliper.domain.VideoProcessingRequest
 import com.github.oxyethylene.cliper.service.process.DefaultProcessRunner
 import com.github.oxyethylene.cliper.service.settings.AppSettings
 import com.github.oxyethylene.cliper.service.settings.AppSettingsStore
+import com.github.oxyethylene.cliper.service.settings.ThemeMode
 import com.github.oxyethylene.cliper.service.video.DefaultFfmpegService
 import com.github.oxyethylene.cliper.service.video.FfmpegService
 import kotlinx.coroutines.Job
@@ -41,6 +42,7 @@ data class VideoProcessingUiState(
     val errorMessage: String? = null,
     val askOverwriteConfirmation: Boolean = false,
     val selectedTab: SidebarTab = SidebarTab.Video,
+    val themeMode: ThemeMode = ThemeMode.FOLLOW_SYSTEM,
 )
 
 class VideoProcessingViewModel(
@@ -57,6 +59,7 @@ class VideoProcessingViewModel(
         _state.value = _state.value.copy(
             ffmpegPath = loaded.ffmpegPath,
             bitrateKbps = loaded.defaultBitrateKbps,
+            themeMode = loaded.themeMode,
         )
     }
 
@@ -66,6 +69,12 @@ class VideoProcessingViewModel(
 
     fun updateFfmpegPath(value: String) {
         val next = _state.value.copy(ffmpegPath = value.trim())
+        _state.value = next
+        persistSettings(next)
+    }
+
+    fun updateThemeMode(value: ThemeMode) {
+        val next = _state.value.copy(themeMode = value)
         _state.value = next
         persistSettings(next)
     }
@@ -247,6 +256,7 @@ class VideoProcessingViewModel(
             AppSettings(
                 ffmpegPath = state.ffmpegPath,
                 defaultBitrateKbps = state.bitrateKbps,
+                themeMode = state.themeMode,
             ),
         )
     }
