@@ -8,6 +8,8 @@ import com.github.oxyethylene.cliper.domain.ProcessingState
 import com.github.oxyethylene.cliper.domain.TimelineThumbnail
 import com.github.oxyethylene.cliper.domain.VideoProcessingRequest
 import com.github.oxyethylene.cliper.service.process.DefaultProcessRunner
+import com.github.oxyethylene.cliper.service.settings.AppSettings
+import com.github.oxyethylene.cliper.service.settings.AppSettingsStore
 import com.github.oxyethylene.cliper.service.video.DefaultFfmpegService
 import com.github.oxyethylene.cliper.service.video.FfmpegService
 import kotlinx.coroutines.Job
@@ -18,7 +20,11 @@ import kotlinx.coroutines.launch
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.Path
-import kotlin.math.min
+
+enum class SidebarTab {
+    Video,
+    Settings,
+}
 
 data class VideoProcessingUiState(
     val ffmpegPath: String = "ffmpeg",
@@ -34,22 +40,39 @@ data class VideoProcessingUiState(
     val canProcess: Boolean = false,
     val errorMessage: String? = null,
     val askOverwriteConfirmation: Boolean = false,
+    val selectedTab: SidebarTab = SidebarTab.Video,
 )
 
 class VideoProcessingViewModel(
     private val ffmpegService: FfmpegService = DefaultFfmpegService(DefaultProcessRunner()),
+    private val settingsStore: AppSettingsStore = AppSettingsStore(),
 ) : ViewModel() {
     private val _state = MutableStateFlow(VideoProcessingUiState())
     val state: StateFlow<VideoProcessingUiState> = _state.asStateFlow()
 
     private var processingJob: Job? = null
 
+    init {
+        val loaded = settingsStore.load()
+        _state.value = _state.value.copy(
+            ffmpegPath = loaded.ffmpegPath,
+            bitrateKbps = loaded.defaultBitrateKbps,
+        )
+    }
+
+    fun selectTab(tab: SidebarTab) {
+        _state.value = _state.value.copy(selectedTab = tab)
+    }
+
     fun updateFfmpegPath(value: String) {
-        _state.value = _state.value.copy(ffmpegPath = value.trim())
+        val next = _state.value.copy(ffmpegPath = value.trim())
+        _state.value = next
+        persistSettings(next)
     }
 
     fun updateInputPath(value: String) {
         _state.value = _state.value.copy(inputPath = value.trim())
+        recalculateCanProcess()
     }
 
     fun updateOutputPath(value: String) {
@@ -59,7 +82,10 @@ class VideoProcessingViewModel(
 
     fun updateBitrate(value: String) {
         val bitrate = value.toIntOrNull() ?: return
-        _state.value = _state.value.copy(bitrateKbps = bitrate)
+        val next = _state.value.copy(bitrateKbps = bitrate)
+        _state.value = next
+        recalculateCanProcess()
+        persistSettings(next)
     }
 
     fun updateStart(seconds: Float) {
@@ -214,6 +240,15 @@ class VideoProcessingViewModel(
         val validBitrate = current.bitrateKbps > 0
         val hasDuration = current.maxDurationSeconds > 0f
         _state.value = current.copy(canProcess = hasInput && hasOutput && validTimes && validBitrate && hasDuration)
+    }
+
+    private fun persistSettings(state: VideoProcessingUiState) {
+        settingsStore.save(
+            AppSettings(
+                ffmpegPath = state.ffmpegPath,
+                defaultBitrateKbps = state.bitrateKbps,
+            ),
+        )
     }
 
     override fun onCleared() {
