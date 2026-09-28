@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,10 +13,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -23,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -91,14 +95,18 @@ fun VideoProcessingScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when (state.selectedTab) {
-                    SidebarTab.Video -> VideoTabContent(
-                        state = state,
-                        viewModel = viewModel,
-                    )
-                    SidebarTab.Settings -> SettingsTabContent(
-                        state = state,
-                        viewModel = viewModel,
-                    )
+                    SidebarTab.Video -> Box(modifier = Modifier.weight(1f)) {
+                        VideoTabContent(
+                            state = state,
+                            viewModel = viewModel,
+                        )
+                    }
+                    SidebarTab.Settings -> Box(modifier = Modifier.weight(1f)) {
+                        SettingsTabContent(
+                            state = state,
+                            viewModel = viewModel,
+                        )
+                    }
                 }
 
                 if (!state.errorMessage.isNullOrBlank()) {
@@ -172,81 +180,150 @@ private fun VideoTabContent(
     state: VideoProcessingUiState,
     viewModel: VideoProcessingViewModel,
 ) {
-    Text("Video", style = MaterialTheme.typography.headlineMedium)
-    Text("Trim your clip and export with your saved settings.")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Video", style = MaterialTheme.typography.headlineMedium)
+        Text("Trim your clip and export with your saved settings.")
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = state.inputPath,
-            onValueChange = viewModel::updateInputPath,
-            label = { Text("Input video") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-        )
-        Button(onClick = {
-            chooseFile(title = "Select Input Video")?.let {
-                viewModel.updateInputPath(it)
-                viewModel.loadMetadataAndThumbnails()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = state.inputPath,
+                onValueChange = viewModel::updateInputPath,
+                label = { Text("Input video") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+            )
+            Button(onClick = {
+                chooseFile(title = "Select Input Video")?.let {
+                    viewModel.updateInputPath(it)
+                    viewModel.loadMetadataAndThumbnails()
+                }
+            }) {
+                Text("Pick")
             }
-        }) {
-            Text("Pick")
         }
-    }
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = state.outputPath,
-            onValueChange = viewModel::updateOutputPath,
-            label = { Text("Output video") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-        )
-        Button(onClick = {
-            chooseSaveFile(title = "Select Output Video")?.let(viewModel::updateOutputPath)
-        }) {
-            Text("Save As")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = state.outputPath,
+                onValueChange = viewModel::updateOutputPath,
+                label = { Text("Output video") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+            )
+            Button(onClick = {
+                chooseSaveFile(title = "Select Output Video")?.let(viewModel::updateOutputPath)
+            }) {
+                Text("Save As")
+            }
         }
-    }
 
-    Text("Target bitrate: ${state.bitrateKbps} kbps")
+        Text("Target bitrate: ${state.bitrateKbps} kbps")
 
-    if (state.maxDurationSeconds > 0f) {
-        Text("Timeline preview")
-        ThumbnailStrip(state)
-        Text("Start: ${formatSeconds(state.startSeconds)}")
-        Slider(
-            value = state.startSeconds,
-            onValueChange = viewModel::updateStart,
-            valueRange = 0f..state.endSeconds,
-        )
-        Text("End: ${formatSeconds(state.endSeconds)}")
-        Slider(
-            value = state.endSeconds,
-            onValueChange = viewModel::updateEnd,
-            valueRange = state.startSeconds..state.maxDurationSeconds,
-        )
-    }
+        if (state.maxDurationSeconds > 0f) {
+            Text("Timeline preview")
+            ThumbnailStrip(state)
 
-    when (val processing = state.processingState) {
-        is ProcessingState.Running -> {
-            LinearProgressIndicator(progress = { processing.progress }, modifier = Modifier.fillMaxWidth())
-            Text(processing.statusText)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Trim range", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "${formatSeconds(state.startSeconds)} – ${formatSeconds(state.endSeconds)}",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = MaterialTheme.shapes.medium,
+                            ),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(12.dp)
+                                .align(Alignment.Center)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    shape = MaterialTheme.shapes.small,
+                                ),
+                        )
+
+                        val selectedStart = (state.startSeconds / state.maxDurationSeconds).coerceIn(0f, 1f)
+                        val selectedEnd = (state.endSeconds / state.maxDurationSeconds).coerceIn(0f, 1f)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.Center)
+                                .padding(horizontal = 12.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(fraction = (selectedEnd - selectedStart).coerceIn(0f, 1f))
+                                    .height(16.dp)
+                                    .align(Alignment.CenterStart)
+                                    .offset(x = (((selectedStart) * 100).dp))
+                                    .background(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = MaterialTheme.shapes.small,
+                                    ),
+                            )
+                        }
+                    }
+
+                    RangeSlider(
+                        value = state.startSeconds..state.endSeconds,
+                        onValueChange = { range ->
+                            viewModel.updateStart(range.start)
+                            viewModel.updateEnd(range.endInclusive)
+                        },
+                        valueRange = 0f..state.maxDurationSeconds,
+                        steps = 0,
+                    )
+                }
+            }
         }
-        is ProcessingState.Done -> Text("Done: ${processing.outputPath}")
-        is ProcessingState.Error -> Text("Error: ${processing.message}", color = MaterialTheme.colorScheme.error)
-        is ProcessingState.Cancelled -> Text("Processing cancelled")
-        ProcessingState.Idle -> Unit
-    }
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { viewModel.loadMetadataAndThumbnails() }, enabled = state.inputPath.isNotBlank()) {
-            Text("Refresh Preview")
+        when (val processing = state.processingState) {
+            is ProcessingState.Running -> {
+                LinearProgressIndicator(progress = { processing.progress }, modifier = Modifier.fillMaxWidth())
+                Text(processing.statusText)
+            }
+            is ProcessingState.Done -> Text("Done: ${processing.outputPath}")
+            is ProcessingState.Error -> Text("Error: ${processing.message}", color = MaterialTheme.colorScheme.error)
+            is ProcessingState.Cancelled -> Text("Processing cancelled")
+            ProcessingState.Idle -> Unit
         }
-        Button(onClick = { viewModel.startProcessing() }, enabled = state.canProcess) {
-            Text("Export")
-        }
-        Button(onClick = { viewModel.cancelProcessing() }) {
-            Text("Cancel")
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { viewModel.loadMetadataAndThumbnails() }, enabled = state.inputPath.isNotBlank()) {
+                Text("Refresh Preview")
+            }
+            Button(onClick = { viewModel.startProcessing() }, enabled = state.canProcess) {
+                Text("Export")
+            }
+            Button(onClick = { viewModel.cancelProcessing() }) {
+                Text("Cancel")
+            }
         }
     }
 }
@@ -256,50 +333,57 @@ private fun SettingsTabContent(
     state: VideoProcessingUiState,
     viewModel: VideoProcessingViewModel,
 ) {
-    Text("Settings", style = MaterialTheme.typography.headlineMedium)
-    Text("These values are stored on disk and reused automatically.")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Settings", style = MaterialTheme.typography.headlineMedium)
+        Text("These values are stored on disk and reused automatically.")
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = state.ffmpegPath,
+                onValueChange = viewModel::updateFfmpegPath,
+                label = { Text("FFmpeg binary") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+            )
+            Button(onClick = {
+                chooseFile(title = "Select FFmpeg Binary")?.let(viewModel::updateFfmpegPath)
+            }) {
+                Text("Browse")
+            }
+        }
+
         OutlinedTextField(
-            value = state.ffmpegPath,
-            onValueChange = viewModel::updateFfmpegPath,
-            label = { Text("FFmpeg binary") },
-            modifier = Modifier.weight(1f),
+            value = state.bitrateKbps.toString(),
+            onValueChange = viewModel::updateBitrate,
+            label = { Text("Default target video bitrate (kbps)") },
             singleLine = true,
         )
-        Button(onClick = {
-            chooseFile(title = "Select FFmpeg Binary")?.let(viewModel::updateFfmpegPath)
-        }) {
-            Text("Browse")
+
+        Text("Theme", style = MaterialTheme.typography.titleMedium)
+        Text("Choose Light, Dark, or follow the OS appearance.")
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThemeModeChip(
+                label = "Follow OS",
+                selected = state.themeMode == ThemeMode.FOLLOW_SYSTEM,
+                onClick = { viewModel.updateThemeMode(ThemeMode.FOLLOW_SYSTEM) },
+            )
+            ThemeModeChip(
+                label = "Light",
+                selected = state.themeMode == ThemeMode.LIGHT,
+                onClick = { viewModel.updateThemeMode(ThemeMode.LIGHT) },
+            )
+            ThemeModeChip(
+                label = "Dark",
+                selected = state.themeMode == ThemeMode.DARK,
+                onClick = { viewModel.updateThemeMode(ThemeMode.DARK) },
+            )
         }
-    }
-
-    OutlinedTextField(
-        value = state.bitrateKbps.toString(),
-        onValueChange = viewModel::updateBitrate,
-        label = { Text("Default target video bitrate (kbps)") },
-        singleLine = true,
-    )
-
-    Text("Theme", style = MaterialTheme.typography.titleMedium)
-    Text("Choose Light, Dark, or follow the OS appearance.")
-
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ThemeModeChip(
-            label = "Follow OS",
-            selected = state.themeMode == ThemeMode.FOLLOW_SYSTEM,
-            onClick = { viewModel.updateThemeMode(ThemeMode.FOLLOW_SYSTEM) },
-        )
-        ThemeModeChip(
-            label = "Light",
-            selected = state.themeMode == ThemeMode.LIGHT,
-            onClick = { viewModel.updateThemeMode(ThemeMode.LIGHT) },
-        )
-        ThemeModeChip(
-            label = "Dark",
-            selected = state.themeMode == ThemeMode.DARK,
-            onClick = { viewModel.updateThemeMode(ThemeMode.DARK) },
-        )
     }
 }
 
