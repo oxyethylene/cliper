@@ -11,6 +11,12 @@ data class TimelineThumbnail(
     val imagePath: Path,
 )
 
+enum class ExportAccelerationMode {
+    AUTO,
+    GPU,
+    CPU,
+}
+
 data class VideoProcessingRequest(
     val ffmpegPath: String,
     val inputPath: Path,
@@ -19,6 +25,7 @@ data class VideoProcessingRequest(
     val endSeconds: Double,
     val targetBitrateKbps: Int,
     val overwriteOutput: Boolean,
+    val accelerationMode: ExportAccelerationMode = ExportAccelerationMode.AUTO,
 )
 
 sealed interface ProcessingResult {
