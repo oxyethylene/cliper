@@ -34,8 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
 import com.github.oxyethylene.cliper.domain.ProcessingState
 import com.github.oxyethylene.cliper.service.settings.ThemeMode
@@ -335,7 +335,7 @@ private fun ThumbnailStrip(state: VideoProcessingUiState) {
             val painter = remember(item.imagePath) {
                 runCatching {
                     val bytes = item.imagePath.toFile().readBytes()
-                    BitmapPainter(Image.makeFromEncoded(bytes).asImageBitmap())
+                    BitmapPainter(Image.makeFromEncoded(bytes).toComposeImageBitmap())
                 }.getOrNull()
             }
 
