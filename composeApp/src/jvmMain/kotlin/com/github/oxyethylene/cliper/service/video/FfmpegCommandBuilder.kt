@@ -2,6 +2,9 @@ package com.github.oxyethylene.cliper.service.video
 
 import java.nio.file.Path
 
+import com.github.oxyethylene.cliper.domain.ExportAccelerationMode
+import java.util.Locale
+
 object FfmpegCommandBuilder {
     fun probeDuration(
         ffmpegPath: String,
@@ -20,15 +23,17 @@ object FfmpegCommandBuilder {
         endSeconds: Double,
         targetBitrateKbps: Int,
         overwriteOutput: Boolean,
+        accelerationMode: ExportAccelerationMode = ExportAccelerationMode.AUTO,
     ): List<String> {
+        val encoder = chooseEncoder(accelerationMode)
         val command = mutableListOf(
             ffmpegPath,
             "-ss", startSeconds.toString(),
             "-to", endSeconds.toString(),
             "-i", inputPath.toString(),
-            "-c:v", "libx264",
+            "-c:v", encoder,
             "-b:v", "${targetBitrateKbps}k",
-            "-preset", "medium",
+            "-preset", if (encoder == "libx264") "medium" else "medium",
             "-c:a", "aac",
             "-b:a", "128k",
         )
@@ -52,4 +57,19 @@ object FfmpegCommandBuilder {
         "-y",
         outputPath.toString(),
     )
+
+    private fun chooseEncoder(accelerationMode: ExportAccelerationMode): String = when (accelerationMode) {
+        ExportAccelerationMode.CPU -> "libx264"
+        ExportAccelerationMode.GPU -> platformPreferredGpuEncoder()
+        ExportAccelerationMode.AUTO -> platformPreferredGpuEncoder().takeIf { it != "libx264" } ?: "libx264"
+    }
+
+    private fun platformPreferredGpuEncoder(): String {
+        val os = System.getProperty("os.name", "").lowercase(Locale.getDefault())
+        return when {
+            os.contains("mac") -> "h264_videotoolbox"
+            os.contains("win") -> "h264_nvenc"
+            else -> "libx264"
+        }
+    }
 }

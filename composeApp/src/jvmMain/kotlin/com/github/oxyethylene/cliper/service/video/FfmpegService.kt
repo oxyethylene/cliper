@@ -1,5 +1,6 @@
 package com.github.oxyethylene.cliper.service.video
 
+import com.github.oxyethylene.cliper.domain.ExportAccelerationMode
 import com.github.oxyethylene.cliper.domain.MediaMetadata
 import com.github.oxyethylene.cliper.domain.ProcessingResult
 import com.github.oxyethylene.cliper.domain.TimelineThumbnail
@@ -9,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Locale
 import kotlin.math.max
 
 interface FfmpegService {
@@ -98,38 +100,76 @@ class DefaultFfmpegService(
             return@withContext ProcessingResult.Failure("Target bitrate must be a positive value.")
         }
 
-        val command = FfmpegCommandBuilder.exportTrimmedWithBitrate(
-            ffmpegPath = request.ffmpegPath,
-            inputPath = request.inputPath,
-            outputPath = request.outputPath,
-            startSeconds = request.startSeconds,
-            endSeconds = request.endSeconds,
-            targetBitrateKbps = request.targetBitrateKbps,
-            overwriteOutput = request.overwriteOutput,
-        )
-
-        return@withContext try {
-            processRunner.run(command = command) { line ->
-                val progress = parseProgressFraction(
-                    ffmpegLine = line,
-                    startSeconds = request.startSeconds,
-                    endSeconds = request.endSeconds,
-                )
-                if (progress != null) {
-                    onProgress(progress, "Encoding ${(progress * 100).toInt()}%")
+        val attempts = when (request.accelerationMode) {
+            ExportAccelerationMode.CPU -> listOf(ExportAccelerationMode.CPU)
+            ExportAccelerationMode.GPU -> listOf(ExportAccelerationMode.GPU, ExportAccelerationMode.CPU)
+            ExportAccelerationMode.AUTO -> {
+                val preferred = if (supportsGpuEncoding()) ExportAccelerationMode.GPU else ExportAccelerationMode.CPU
+                if (preferred == ExportAccelerationMode.CPU) {
+                    listOf(ExportAccelerationMode.CPU)
+                } else {
+                    listOf(ExportAccelerationMode.GPU, ExportAccelerationMode.CPU)
                 }
             }
-            ProcessingResult.Success(request.outputPath)
-        } catch (error: Throwable) {
-            ProcessingResult.Failure(
-                message = "FFmpeg processing failed.",
-                details = error.message,
-            )
         }
+
+        var lastError: Throwable? = null
+
+        for (mode in attempts) {
+            val command = FfmpegCommandBuilder.exportTrimmedWithBitrate(
+                ffmpegPath = request.ffmpegPath,
+                inputPath = request.inputPath,
+                outputPath = request.outputPath,
+                startSeconds = request.startSeconds,
+                endSeconds = request.endSeconds,
+                targetBitrateKbps = request.targetBitrateKbps,
+                overwriteOutput = request.overwriteOutput,
+                accelerationMode = mode,
+            )
+
+            try {
+                processRunner.run(command = command) { line ->
+                    val progress = parseProgressFraction(
+                        ffmpegLine = line,
+                        startSeconds = request.startSeconds,
+                        endSeconds = request.endSeconds,
+                    )
+                    if (progress != null) {
+                        onProgress(progress, buildStatusText(mode, progress))
+                    }
+                }
+                return@withContext ProcessingResult.Success(request.outputPath)
+            } catch (error: Throwable) {
+                lastError = error
+                if (mode == ExportAccelerationMode.CPU) {
+                    break
+                }
+                onProgress(0f, "GPU encoder unavailable, falling back to CPU...")
+            }
+        }
+
+        return@withContext ProcessingResult.Failure(
+            message = "FFmpeg processing failed.",
+            details = lastError?.message ?: "Unknown export error.",
+        )
     }
 
     override fun cancelActiveProcess() {
         processRunner.cancelActiveProcess()
+    }
+
+    private fun supportsGpuEncoding(): Boolean {
+        val osName = System.getProperty("os.name", "").lowercase(Locale.getDefault())
+        return osName.contains("mac") || osName.contains("win")
+    }
+
+    private fun buildStatusText(mode: ExportAccelerationMode, progress: Float): String {
+        val label = when (mode) {
+            ExportAccelerationMode.GPU -> "GPU"
+            ExportAccelerationMode.CPU -> "CPU"
+            ExportAccelerationMode.AUTO -> "Auto"
+        }
+        return "Encoding $label ${(progress * 100).toInt()}%"
     }
 
     private fun parseDurationSeconds(stderr: String): Double? {
